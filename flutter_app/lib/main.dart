@@ -7,9 +7,9 @@ import 'package:flutter_app/history_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-// ÖNEMLİ: Bilgisayarınızın IP adresini buraya yazın
-const String YOUR_COMPUTER_IP = "192.168.199.142";
-const String SERVER_URL = "http://$YOUR_COMPUTER_IP:8000/analyze";
+// ÖNEMLİ: IP Adresiniz (Değişirse buradan güncelleyin)
+const String computer_ip = "10.212.33.142"; 
+const String SERVER_URL = "http://$computer_ip:8000/analyze";
 
 void main() {
   runApp(const MyApp());
@@ -24,29 +24,34 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Yüz Analiz Projesi',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple, 
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.bold),
+          iconTheme: IconThemeData(color: Colors.deepPurple),
+        ),
       ),
       home: const AnalysisPage(),
     );
   }
 }
 
-// Yeni veri modelimiz: Analiz sonuçlarını tutacak
+// Veri Modeli
 class FaceAnalysisResult {
   final int? age;
   final String? gender;
   final String? dominantEmotion;
   final String? dominantRace;
 
-  FaceAnalysisResult({
-    this.age,
-    this.gender,
-    this.dominantEmotion,
-    this.dominantRace,
-  });
-
-  // JSON'dan FaceAnalysisResult objesine dönüştürme metodu
+  FaceAnalysisResult({this.age, this.gender, this.dominantEmotion, this.dominantRace});
+ 
+ //FastAPIden gelen JSONu objeye çevirir
   factory FaceAnalysisResult.fromJson(Map<String, dynamic> json) {
     return FaceAnalysisResult(
       age: json['age'] as int?,
@@ -54,27 +59,6 @@ class FaceAnalysisResult {
       dominantEmotion: json['dominant_emotion'] as String?,
       dominantRace: json['dominant_race'] as String?,
     );
-  }
-
-  // Map<String, dynamic> toMap() {
-  //   return {
-  //     // ID'yi null bırakıyoruz, veritabanı otomatik artıracak
-  //     DatabaseHelper.columnAge: age,
-  //     DatabaseHelper.columnGender: gender,
-  //     DatabaseHelper.columnEmotion: dominantEmotion,
-  //     DatabaseHelper.columnRace: dominantRace,
-  //     DatabaseHelper.columnTimestamp: DateTime.now().toIso8601String(), // Kayıt anını ekliyoruz
-  //   };
-  // }
-
-  // Pop-up için güzel bir formatlama metodu
-  String toDisplayString() {
-    return """
-Yaş: ${age ?? 'Bilinmiyor'}
-Cinsiyet: ${gender ?? 'Bilinmiyor'}
-Duygu: ${dominantEmotion ?? 'Bilinmiyor'}
-Irk: ${dominantRace ?? 'Bilinmiyor'}
-    """;
   }
 }
 
@@ -91,277 +75,345 @@ class _AnalysisPageState extends State<AnalysisPage> {
   final dbHelper = DatabaseHelper.instance;
 
   File? _imageFile;
-  String _statusMessage = "Analiz etmek için fotoğraf seçin.";
+  String _statusMessage = "Analiz için fotoğraf seçin";
   bool _isLoading = false;
-  FaceAnalysisResult? _lastAnalysisResult; // Son analiz sonucunu tutacak
+  FaceAnalysisResult? _lastAnalysisResult;
 
-  // Pop-up'ı gösteren metod (GÜNCELLENDİ)
-  void _showAnalysisDialog(FaceAnalysisResult result) {
-    showDialog(
+  // Yardımcı: İngilizce çıktıları Türkçeye ve İkona çevirir
+  Map<String, dynamic> _getEmotionData(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy': return {'label': 'Mutlu', 'icon': Icons.sentiment_very_satisfied, 'color': Colors.green};
+      case 'sad': return {'label': 'Üzgün', 'icon': Icons.sentiment_dissatisfied, 'color': Colors.blueGrey};
+      case 'angry': return {'label': 'Kızgın', 'icon': Icons.sentiment_very_dissatisfied, 'color': Colors.red};
+      case 'surprise': return {'label': 'Şaşkın', 'icon': Icons.emoji_people, 'color': Colors.orange};
+      case 'fear': return {'label': 'Korkmuş', 'icon': Icons.error_outline, 'color': Colors.purple};
+      case 'neutral': return {'label': 'Nötr', 'icon': Icons.sentiment_neutral, 'color': Colors.grey};
+      case 'disgust': return {'label': 'Tiksinmiş', 'icon': Icons.sick, 'color': Colors.brown};
+      default: return {'label': emotion ?? 'Bilinmiyor', 'icon': Icons.help_outline, 'color': Colors.black};
+    }
+  }
+
+  IconData _getGenderIcon(String? gender) {
+    if (gender == 'Man') return Icons.male;
+    if (gender == 'Woman') return Icons.female;
+    return Icons.person;
+  }
+
+  String _translateGender(String? gender) {
+    if (gender == 'Man') return 'Erkek';
+    if (gender == 'Woman') return 'Kadın';
+    return 'Bilinmiyor';
+  }
+
+  //SONUÇ EKRANI (ModalBottomSheet)
+  void _showResultSheet(FaceAnalysisResult result) {
+    final emotionData = _getEmotionData(result.dominantEmotion);
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+      ),
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Yüz Analiz Sonuçları'),
-          content: Text(result.toDisplayString()),
-          actions: <Widget>[
-            // YENİ "KAYDET" BUTONU
-            TextButton(
-              child: const Text('Kaydet'),
-              onPressed: () {
-                _saveAnalysis(result);
-                Navigator.of(context).pop(); // Pop-up'ı kapat
-              },
-            ),
-            // ESKİ "KAPAT" BUTONU
-            TextButton(
-              child: const Text('Kapat'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Pop-up'ı kapat
-              },
-            ),
-          ],
+        return Container(
+          padding: const EdgeInsets.all(24),
+          height: 450,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25.0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 50, height: 5,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text("Analiz Sonuçları", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              
+              // Sonuç Kartları Grid Yapısı
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.3,
+                  crossAxisSpacing: 15,
+                  mainAxisSpacing: 15,
+                  children: [
+                    _buildInfoCard(
+                      title: "Yaş",
+                      value: "${result.age}",
+                      icon: Icons.cake,
+                      color: Colors.blueAccent,
+                    ),
+                    _buildInfoCard(
+                      title: "Cinsiyet",
+                      value: _translateGender(result.gender),
+                      icon: _getGenderIcon(result.gender),
+                      color: result.gender == 'Woman' ? Colors.pinkAccent : Colors.blue,
+                    ),
+                    _buildInfoCard(
+                      title: "Duygu",
+                      value: emotionData['label'],
+                      icon: emotionData['icon'],
+                      color: emotionData['color'],
+                    ),
+                    _buildInfoCard(
+                      title: "Irk/Köken",
+                      value: result.dominantRace ?? "?",
+                      icon: Icons.public,
+                      color: Colors.teal,
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 10),
+              
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.save),
+                  label: const Text("Sonucu ve Fotoğrafı Kaydet"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    _saveAnalysis(result);
+                    Navigator.pop(context);
+                  },
+                ),
+              )
+            ],
+          ),
         );
       },
     );
   }
 
-  // 1. YENİ METOT: Galeriden fotoğraf seçer
-  Future<void> _pickFromGallery() async {
-    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      // Fotoğraf seçildiyse, analiz sürecini başlat
-      _startAnalysis(pickedFile);
-    }
-  }
-
-  Future<void> _openCamera() async {
-    // ImagePicker'ı, "Galeri" yerine "Kamera" kaynağıyla çağırıyoruz
-    final XFile? takenFile = await _picker.pickImage(
-      source: ImageSource.camera, // <-- TEK DEĞİŞİKLİK BURADA
+  Widget _buildInfoCard({required String title, required String value, required IconData icon, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 32, color: color),
+          const SizedBox(height: 8),
+          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          Text(value, style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
-
-    if (takenFile != null) {
-      // Fotoğraf çekildiyse, mevcut analiz sürecini başlat
-      _startAnalysis(takenFile);
-    }
   }
 
-  // 3. YENİ METOT: Analiz sürecini yürüten ana fonksiyon
-  // (Bu, eski _pickAndAnalyzeImage metodundaki try-catch bloğudur)
+  // Fonksiyonlar (Galeri/Kamera/Analiz/Kayıt)
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? file = await _picker.pickImage(source: source);
+    if (file != null) _startAnalysis(file);
+  }
+
   Future<void> _startAnalysis(XFile imageFile) async {
     setState(() {
-      _imageFile = File(imageFile.path); // Seçilen/Çekilen fotoğrafı ekranda göster
+      _imageFile = File(imageFile.path);
       _isLoading = true;
       _statusMessage = "Analiz ediliyor...";
       _lastAnalysisResult = null;
     });
 
     try {
-      // 2. Fotoğrafı Sunucuya Gönder
       String fileName = imageFile.path.split('/').last;
       FormData formData = FormData.fromMap({
-        "file": await MultipartFile.fromFile(
-          imageFile.path,
-          filename: fileName,
-        ),
+        "file": await MultipartFile.fromFile(imageFile.path, filename: fileName),
       });
 
       final response = await _dio.post(SERVER_URL, data: formData);
 
-      // 3. Sonucu Al
       if (response.statusCode == 200) {
-        final data = response.data;
-        final result = FaceAnalysisResult.fromJson(data);
-
+        final result = FaceAnalysisResult.fromJson(response.data);
         setState(() {
           _lastAnalysisResult = result;
-          _statusMessage = "Analiz Tamamlandı! Fotoğrafa tıklayın.";
+          _statusMessage = "Analiz Tamamlandı!";
         });
-
-      } else {
-        setState(() {
-          _statusMessage = "Hata: Sunucudan beklenen cevap alınamadı.";
-        });
+        // Sonuç geldiği gibi ekranı aç
+        _showResultSheet(result);
       }
     } on DioException catch (e) {
-      String hataMesaji = "Bir hata oluştu: ${e.message}";
-      if (e.response != null) {
-        hataMesaji = "Hata: ${e.response?.data['detail'] ?? 'Bilinmeyen sunucu hatası'}";
-      }
       setState(() {
-        _statusMessage = hataMesaji;
+        _statusMessage = "Bağlantı hatası: ${e.message}";
       });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_statusMessage), backgroundColor: Colors.red));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveAnalysis(FaceAnalysisResult result) async {
-    // 1. O an analiz edilen fotoğrafın 'File' objesini al
-    final imageFileToSave = _imageFile;
-    if (imageFileToSave == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kaydedilecek fotoğraf bulunamadı!'), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
+    if (_imageFile == null) return;
     try {
-      // 2. Fotoğrafı kopyalamak için uygulamanın kalıcı dizinini bul
       final appDir = await getApplicationDocumentsDirectory();
-
-      // 3. Eşsiz bir dosya adı oluştur (örn: 16788865945.jpg)
-      // (p.extension: dosya uzantısını alır, örn: ".jpg")
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileExtension = p.extension(imageFileToSave.path);
-      final newFileName = '$timestamp$fileExtension';
+      final newPath = p.join(appDir.path, '$timestamp.jpg');
+      await _imageFile!.copy(newPath);
 
-      // 4. Yeni tam dosya yolunu oluştur (örn: /.../app_docs/16788865945.jpg)
-      // (p.join: yolları işletim sistemine göre doğru birleştirir)
-      final newPath = p.join(appDir.path, newFileName);
-
-      // 5. Fotoğrafı o anki yerinden (galeri/cache) yeni kalıcı yoluna KOPYALA
-      final File newImageFile = await imageFileToSave.copy(newPath);
-
-      // 6. Artık hem bilgiyi hem de yeni fotoğrafın yolunu veritabanına kaydet
       final row = {
         DatabaseHelper.columnAge: result.age,
         DatabaseHelper.columnGender: result.gender,
         DatabaseHelper.columnEmotion: result.dominantEmotion,
         DatabaseHelper.columnRace: result.dominantRace,
         DatabaseHelper.columnTimestamp: DateTime.now().toIso8601String(),
-        DatabaseHelper.columnImagePath: newImageFile.path // <-- YENİ BİLGİ BURADA
+        DatabaseHelper.columnImagePath: newPath
       };
-
-      final id = await dbHelper.insert(row);
-      print('Analiz ve fotoğraf kaydedildi, ID: $id, Path: ${newImageFile.path}');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Analiz ve fotoğraf başarıyla kaydedildi!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      await dbHelper.insert(row);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kaydedildi!'), backgroundColor: Colors.green));
     } catch (e) {
-      print('Kayıt hatası: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Kayıt sırasında hata: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print(e);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Yüz Analizi'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history), // Geçmiş ikonu
-            tooltip: "Geçmiş Analizler", // Üzerine basılı tutunca çıkan yazı
-            onPressed: () {
-              // Tıklayınca HistoryPage'i aç
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const HistoryPage()),
-              );
-            },
+      // Arka plan için hafif gradient
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.deepPurple.shade50, Colors.white],
           ),
-        ]
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+        ),
+        child: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              // Seçilen fotoğrafı göstermek için ve tıklanabilir yaptık
-              GestureDetector(
-                onTap: () {
-                  // Sadece analiz tamamlandıysa pop-up'ı göster
-                  if (_lastAnalysisResult != null) {
-                    _showAnalysisDialog(_lastAnalysisResult!);
-                  }
-                },
-                child: Container(
-                  height: 250,
-                  width: 250,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _lastAnalysisResult != null ? Colors.green : Colors.blueAccent,
-                      width: _lastAnalysisResult != null ? 3 : 1
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: _imageFile != null
-                      ? Image.file(_imageFile!, fit: BoxFit.cover)
-                      : const Icon(Icons.image_not_supported, size: 100, color: Colors.grey),
+            children: [
+              // Özel AppBar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Yüz Analizi", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    IconButton(
+                      icon: const Icon(Icons.history_rounded, size: 28),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage())),
+                    )
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              Column(
-                // Butonların genişleyip tüm yatay alanı kaplamasını sağlar
-                crossAxisAlignment: CrossAxisAlignment.stretch, 
-                children: [
-                  // 1. KAMERA BUTONU (Yeniden Stillendirildi)
-                  ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _openCamera,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Fotoğraf Çek'),
-                    style: ElevatedButton.styleFrom(
-                      // backgroundColor: Theme.of(context).primaryColor, // Ana temaya uygun renk
-                      foregroundColor: Colors.white,
-                      backgroundColor: Colors.brown.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 12), // Daha uzun buton
-                      textStyle: const TextStyle(fontSize: 16), // Daha büyük yazı
-                    ),
-                  ),
-
-                  const SizedBox(height: 12), // İki buton arasına boşluk
-
-                  // 2. GALERİ BUTONU (Yeniden Stillendirildi)
-                  ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _pickFromGallery,
-                    icon: const Icon(Icons.image_search),
-                    label: const Text('Galeriden Seç'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      textStyle: const TextStyle(fontSize: 16),
-                      // İkinci butonun farklı görünmesi için (isteğe bağlı)
-                      backgroundColor: Colors.amber.shade500, 
-                      foregroundColor: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
               
-              // Durum alanı
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Text(
-                  _statusMessage,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // Fotoğraf Alanı
+                      GestureDetector(
+                        onTap: () {
+                          if (_lastAnalysisResult != null) _showResultSheet(_lastAnalysisResult!);
+                        },
+                        child: Container(
+                          height: 350,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _imageFile != null
+                                    ? Image.file(_imageFile!, fit: BoxFit.cover)
+                                    : Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.add_a_photo_outlined, size: 60, color: Colors.grey[400]),
+                                          const SizedBox(height: 10),
+                                          Text("Fotoğraf Seçin veya Çekin", style: TextStyle(color: Colors.grey[500]))
+                                        ],
+                                      ),
+                                // Yükleniyor Animasyonu
+                                if (_isLoading)
+                                  Container(
+                                    color: Colors.black45,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(color: Colors.white),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 15),
+                      Text(_statusMessage, style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 30),
+
+                      // Butonlar
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMainButton(
+                              icon: Icons.camera_alt_rounded,
+                              label: "Kamera",
+                              color: Colors.deepPurple,
+                              onTap: () => _pickImage(ImageSource.camera),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _buildMainButton(
+                              icon: Icons.photo_library_rounded,
+                              label: "Galeri",
+                              color: Colors.orange.shade800,
+                              onTap: () => _pickImage(ImageSource.gallery),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMainButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 28),
+          const SizedBox(height: 5),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
