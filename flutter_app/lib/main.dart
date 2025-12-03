@@ -250,10 +250,22 @@ class _AnalysisPageState extends State<AnalysisPage> {
         _showResultSheet(result);
       }
     } on DioException catch (e) {
-      setState(() {
-        _statusMessage = "Bağlantı hatası: ${e.message}";
+      // --- BURASI DEĞİŞTİ ---
+      if (e.response?.statusCode == 400) {
+        // Sunucu 400 hatası (Bad Request) gönderdiyse, bu "Yüz Bulunamadı" demektir.
+        setState(() {
+          _statusMessage = "⚠️ Yüz tespit edilemedi! Lütfen yüzünüzün net göründüğü bir fotoğraf çekin.";
+        });
+      } else {
+        // Diğer hatalar (İnternet yok, sunucu kapalı vb.)
+        setState(() {
+          _statusMessage = "Bağlantı hatası. Sunucunun açık ve aynı ağda olduğundan emin olun.";
+        });
+      }
+    } catch (e) {
+       setState(() {
+        _statusMessage = "Bilinmeyen bir hata oluştu.";
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_statusMessage), backgroundColor: Colors.red));
     } finally {
       setState(() => _isLoading = false);
     }
