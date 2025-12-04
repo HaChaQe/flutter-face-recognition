@@ -250,7 +250,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
         _showResultSheet(result);
       }
     } on DioException catch (e) {
-      // --- BURASI DEĞİŞTİ ---
+      
       if (e.response?.statusCode == 400) {
         // Sunucu 400 hatası (Bad Request) gönderdiyse, bu "Yüz Bulunamadı" demektir.
         setState(() {
