@@ -48,16 +48,22 @@ class FaceAnalysisResult {
   final String? gender;
   final String? dominantEmotion;
   final String? dominantRace;
+  final Map<String, double>? race;
 
-  FaceAnalysisResult({this.age, this.gender, this.dominantEmotion, this.dominantRace});
+  FaceAnalysisResult({this.age, this.gender, this.dominantEmotion, this.dominantRace, this.race});
  
  //FastAPIden gelen JSONu objeye çevirir
   factory FaceAnalysisResult.fromJson(Map<String, dynamic> json) {
+    Map<String, double>? raceData;
+    if (json['race'] != null){
+      raceData = Map<String, double>.from(json['race'].map((k,v) => MapEntry(k,(v as num).toDouble())));
+    }
     return FaceAnalysisResult(
       age: json['age'] as int?,
       gender: json['gender'] as String?,
       dominantEmotion: json['dominant_emotion'] as String?,
       dominantRace: json['dominant_race'] as String?,
+      race: raceData
     );
   }
 }
@@ -105,97 +111,211 @@ class _AnalysisPageState extends State<AnalysisPage> {
     return 'Bilinmiyor';
   }
 
-  //SONUÇ EKRANI (ModalBottomSheet)
+  // SONUÇ EKRANI
   void _showResultSheet(FaceAnalysisResult result) {
     final emotionData = _getEmotionData(result.dominantEmotion);
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
-      ),
+      isScrollControlled: true, // Tam ekran hissiyatı ve scroll için
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
-          padding: const EdgeInsets.all(24),
-          height: 450,
-          decoration: BoxDecoration(
+          // Ekranın %85'ini kaplasın
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(25.0)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30.0)),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 50, height: 5,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                ),
+              // Tutma çubuğu (Handle)
+              const SizedBox(height: 12),
+              Container(
+                width: 60, height: 6,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
               ),
-              const SizedBox(height: 20),
-              const Text("Analiz Sonuçları", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
               
-              // Sonuç Kartları Grid Yapısı
+              // Başlık ve İçerik
               Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.3,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
                   children: [
-                    _buildInfoCard(
-                      title: "Yaş",
-                      value: "${result.age}",
-                      icon: Icons.cake,
-                      color: Colors.blueAccent,
+                    const Text("Analiz Sonuçları", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.black87)),
+                    const SizedBox(height: 30),
+
+                    // 1. Bölüm: Temel Bilgiler (Yatay Kartlar)
+                    Row(
+                      children: [
+                        Expanded(child: _buildModernInfoCard("Cinsiyet", _translateGender(result.gender), _getGenderIcon(result.gender), result.gender == 'Woman' ? Colors.pinkAccent : Colors.blueAccent)),
+                        const SizedBox(width: 15),
+                        Expanded(child: _buildModernInfoCard("Yaş", "${result.age}", Icons.cake_rounded, Colors.orangeAccent)),
+                        const SizedBox(width: 15),
+                        Expanded(child: _buildModernInfoCard("Duygu", emotionData['label'], emotionData['icon'], emotionData['color'])),
+                      ],
                     ),
-                    _buildInfoCard(
-                      title: "Cinsiyet",
-                      value: _translateGender(result.gender),
-                      icon: _getGenderIcon(result.gender),
-                      color: result.gender == 'Woman' ? Colors.pinkAccent : Colors.blue,
+
+                    const SizedBox(height: 30),
+                    const Divider(thickness: 1, height: 1),
+                    const SizedBox(height: 30),
+
+                    // 2. Bölüm: Detaylı Irk Analizi
+                    const Text("Etnik Köken Dağılımı", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const SizedBox(height: 15),
+                    
+                    _buildRaceBreakdown(result.race),
+
+                    const SizedBox(height: 40),
+
+                    // Kaydet Butonu
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _saveAnalysis(result);
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 8,
+                          shadowColor: Colors.deepPurple.withOpacity(0.4),
+                        ),
+                        child: const Text("Sonuçları Kaydet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                    _buildInfoCard(
-                      title: "Duygu",
-                      value: emotionData['label'],
-                      icon: emotionData['icon'],
-                      color: emotionData['color'],
-                    ),
-                    _buildInfoCard(
-                      title: "Irk/Köken",
-                      value: result.dominantRace ?? "?",
-                      icon: Icons.public,
-                      color: Colors.teal,
-                    ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
-              
-              const SizedBox(height: 10),
-              
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.save),
-                  label: const Text("Sonucu ve Fotoğrafı Kaydet"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    _saveAnalysis(result);
-                    Navigator.pop(context);
-                  },
-                ),
-              )
             ],
           ),
         );
       },
     );
+  }
+
+  // Modern Bilgi Kartı Tasarımı
+  Widget _buildModernInfoCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))
+        ],
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          FittedBox(
+            child: Text(value, style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Yüzdesel Irk Dağılımı Listesi
+  Widget _buildRaceBreakdown(Map<String, double>? raceData) {
+    if (raceData == null) return const Text("Detaylı veri bulunamadı.");
+
+    const double threshold = 1.0; // Yüzde 1'in altındakiler Diğer kategorisinde
+
+    Map<String, double> finalData = {};
+    double otherSum = 0;
+
+    // Yüzdesel ırk dağılımı
+    raceData.forEach((race, percent){
+
+      if(percent <= 0) return; // 0 ve altındaysa gösterme
+
+      if (percent < threshold){
+        otherSum += percent;
+      }else {
+        finalData[race] = percent;
+      }
+    });
+
+    // Verileri yüksekten düşüğe sırala
+    var sortedEntries = finalData.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (otherSum > 0){
+      sortedEntries.add(MapEntry("Diğer", otherSum));
+    }
+
+    // İlk 4-5 tanesini göstermek yeterli olabilir veya hepsini gösterelim
+    return Column(
+      children: sortedEntries.map((e) {
+        // Yüzde değeri
+        double percentage = e.value; 
+        // 0-1 arası normalize değer (Progress bar için)
+        double normalizedValue = percentage / 100;
+
+        Color barColor = e.key == 'Diğer'
+          ? Colors.grey 
+          : (normalizedValue > 0.5 ? Colors.deepPurple : Colors.deepPurple.shade300);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Irk isimlerini baş harfi büyük olacak şekilde düzenle
+                  Text(
+                    _translateRace(e.key),
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)
+                  ),
+                  Text("%${percentage.toStringAsFixed(1)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: normalizedValue,
+                  minHeight: 8,
+                  backgroundColor: Colors.grey[100],
+                  color: barColor
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _translateRace(String raceKey){
+    if (raceKey == "Diğer") return "Diğer";
+
+    switch(raceKey.toLowerCase()) {
+      case 'white': return 'Beyaz';
+      case 'latino hispanic': return 'Latin / Hispanik';
+      case 'asian': return 'Asyalı';
+      case 'middle eastern': return 'Orta Doğulu';
+      case 'indian': return 'Hint';
+      case 'black': return 'Siyahi';
+      default: return raceKey[0].toUpperCase() + raceKey.substring(1);
+    }
   }
 
   Widget _buildInfoCard({required String title, required String value, required IconData icon, required Color color}) {

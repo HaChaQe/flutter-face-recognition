@@ -33,7 +33,7 @@ async def analyze_face(file: UploadFile = File(...)):
         print(f"Dosya geçici olarak kaydedildi: {file_path}")
 
         # DeepFace ile analizi gerçekleştir
-        # Sadece yaş, cinsiyet ve duyguyu analiz et
+        # Yaş, cinsiyet, duygu, ırk analizi
         analysis_result = DeepFace.analyze(
             img_path=file_path, 
             actions=['age', 'gender', 'emotion', 'race'],
@@ -44,19 +44,22 @@ async def analyze_face(file: UploadFile = File(...)):
         first_face_result = analysis_result[0]
 
         # Sadece istediğimiz temiz veriyi seçelim
-        # ve
         # JSON'ın anlayabileceği standart Python tiplerine dönüştürelim
 
         # 'age' (np.float32) -> int (standart tam sayı)
         # 'dominant_gender' (str) -> str (standart metin)
         # 'dominant_emotion' (str) -> str (standart metin)
 
+        raw_race_data = first_face_result.get("race", {})
+        converted_race_data = {k: float(v) for k, v in raw_race_data.items()}
+
         response_data = {
             "status": "success",
             "age": int(first_face_result.get("age")), 
             "gender": str(first_face_result.get("dominant_gender")), # 'gender' değil, 'dominant_gender' olmalı
             "dominant_emotion": str(first_face_result.get("dominant_emotion")),
-            "dominant_race": str(first_face_result.get("dominant_race"))
+            "dominant_race": str(first_face_result.get("dominant_race")),
+            "race": converted_race_data
         }
         
         return JSONResponse(content=response_data)
