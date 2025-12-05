@@ -111,84 +111,176 @@ class _AnalysisPageState extends State<AnalysisPage> {
     return 'Bilinmiyor';
   }
 
-  // SONUÇ EKRANI
-  void _showResultSheet(FaceAnalysisResult result) {
+  // Irka göre renk, selamlama ve ikon döndüren fonksiyon
+  Map<String, dynamic> _getRaceTheme(String? race) {
+    String safeRace = race?.toLowerCase() ?? "";
+    
+    if (safeRace == 'asian') {
+      return {
+        'color': Colors.pink.shade50, // Kiraz çiçeği tonu
+        'mainColor': Colors.pink,
+        'greeting': 'Merhaba / Ni Hao',
+        'bgIcon': Icons.local_florist_rounded // Çiçek ikonu
+      };
+    } else if (safeRace == 'indian') {
+      return {
+        'color': Colors.orange.shade50, // Safran tonu
+        'mainColor': Colors.orange,
+        'greeting': 'Namaste',
+        'bgIcon': Icons.wb_sunny_rounded // Güneş ikonu
+      };
+    } else if (safeRace == 'black') {
+      return {
+        'color': Colors.brown.shade50, // Toprak tonu
+        'mainColor': Colors.brown,
+        'greeting': 'Hello / Jambo',
+        'bgIcon': Icons.public_rounded // Dünya ikonu
+      };
+    } else if (safeRace == 'white') {
+      return {
+        'color': Colors.blue.shade50, // Soğuk/Mavi ton
+        'mainColor': Colors.blue,
+        'greeting': 'Hello / Ciao',
+        'bgIcon': Icons.ac_unit_rounded // Kar tanesi/Kuzey ikonu
+      };
+    } else if (safeRace == 'middle eastern') {
+      return {
+        'color': Colors.amber.shade50, // Kum/Altın tonu
+        'mainColor': Colors.amber.shade800,
+        'greeting': 'Merhaba / Salam',
+        'bgIcon': Icons.nightlight_round_outlined, // Hilal
+        'rotation': -0.6,
+        'offset': 5.0
+      };
+    } else if (safeRace.contains('latino') || safeRace.contains('hispanic')) {
+      return {
+        'color': Colors.green.shade50, // Doğa/Orman tonu
+        'mainColor': Colors.green,
+        'greeting': 'Hola',
+        'bgIcon': Icons.forest_rounded // Orman ikonu
+      };
+    } else {
+      return {
+        'color': Colors.grey.shade50,
+        'mainColor': Colors.deepPurple,
+        'greeting': 'Merhaba',
+        'bgIcon': Icons.face
+      };
+    }
+  }
+
+void _showResultSheet(FaceAnalysisResult result) {
     final emotionData = _getEmotionData(result.dominantEmotion);
+    // Dinamik temayı çekiyoruz
+    final theme = _getRaceTheme(result.dominantRace);
+    final Color mainColor = theme['mainColor'];
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Tam ekran hissiyatı ve scroll için
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
-          // Ekranın %85'ini kaplasın
           height: MediaQuery.of(context).size.height * 0.85,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30.0)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30.0)),
+            // Arka plana hafif bir gradient verelim
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [theme['color'], Colors.white],
+            ),
           ),
-          child: Column(
+          child: Stack(
             children: [
-              // Tutma çubuğu (Handle)
-              const SizedBox(height: 12),
-              Container(
-                width: 60, height: 6,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-              ),
-              
-              // Başlık ve İçerik
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [
-                    const Text("Analiz Sonuçları", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.black87)),
-                    const SizedBox(height: 30),
+              // Arka plan ikonu (Silik bir şekilde sağ üstte)
+              Positioned(
+                right: theme['offset'] ?? -20.0,
+                top: theme['offset'] ?? -20.0,
 
-                    // 1. Bölüm: Temel Bilgiler (Yatay Kartlar)
-                    Row(
+                child: Transform.rotate(
+                  // Temada 'rotation' değeri varsa onu kullan, yoksa 0 (döndürme) yap.
+                  angle: theme['rotation'] ?? 0.0, 
+                  child: Icon(
+                    theme['bgIcon'],
+                    size: 160, 
+                    color: mainColor.withAlpha(30), 
+                  ),
+                ),
+              ),
+              Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 60, height: 6,
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                  ),
+                  
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(24),
                       children: [
-                        Expanded(child: _buildModernInfoCard("Cinsiyet", _translateGender(result.gender), _getGenderIcon(result.gender), result.gender == 'Woman' ? Colors.pinkAccent : Colors.blueAccent)),
-                        const SizedBox(width: 15),
-                        Expanded(child: _buildModernInfoCard("Yaş", "${result.age}", Icons.cake_rounded, Colors.orangeAccent)),
-                        const SizedBox(width: 15),
-                        Expanded(child: _buildModernInfoCard("Duygu", emotionData['label'], emotionData['icon'], emotionData['color'])),
+                        // KÜLTÜREL SELAMLAMA BAŞLIĞI
+                        Text(
+                          theme['greeting'], 
+                          textAlign: TextAlign.center, 
+                          style: TextStyle(
+                            fontSize: 32, 
+                            fontWeight: FontWeight.w900, 
+                            color: theme['mainColor'],
+                            letterSpacing: 1.2
+                          )
+                        ),
+                        const Text("Analiz Raporu", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
+                        
+                        const SizedBox(height: 30),
+
+                        Row(
+                          children: [
+                            Expanded(child: _buildModernInfoCard("Yaş", "${result.age}", Icons.cake_rounded, Colors.orangeAccent)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _buildModernInfoCard("Cinsiyet", _translateGender(result.gender), _getGenderIcon(result.gender), result.gender == 'Woman' ? Colors.pinkAccent : Colors.blueAccent)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _buildModernInfoCard("Duygu", emotionData['label'], emotionData['icon'], emotionData['color'])),
+                          ],
+                        ),
+
+                        const SizedBox(height: 30),
+                        Divider(thickness: 1, height: 1, color: theme['mainColor'].withOpacity(0.2)),
+                        const SizedBox(height: 30),
+
+                        Text("Etnik Köken Dağılımı", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        const SizedBox(height: 15),
+                        
+                        // Irk listesini oluştururken tema rengini gönderelim
+                        _buildRaceBreakdown(result.race, theme['mainColor']),
+
+                        const SizedBox(height: 40),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              _saveAnalysis(result);
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme['mainColor'], // Buton rengi de temaya uysun
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 8,
+                              shadowColor: (theme['mainColor'] as Color).withOpacity(0.4),
+                            ),
+                            child: const Text("Sonuçları Kaydet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
                       ],
                     ),
-
-                    const SizedBox(height: 30),
-                    const Divider(thickness: 1, height: 1),
-                    const SizedBox(height: 30),
-
-                    // 2. Bölüm: Detaylı Irk Analizi
-                    const Text("Etnik Köken Dağılımı", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    const SizedBox(height: 15),
-                    
-                    _buildRaceBreakdown(result.race),
-
-                    const SizedBox(height: 40),
-
-                    // Kaydet Butonu
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          _saveAnalysis(result);
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 8,
-                          shadowColor: Colors.deepPurple.withOpacity(0.4),
-                        ),
-                        child: const Text("Sonuçları Kaydet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -231,7 +323,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
   }
 
   // Yüzdesel Irk Dağılımı Listesi
-  Widget _buildRaceBreakdown(Map<String, double>? raceData) {
+  Widget _buildRaceBreakdown(Map<String, double>? raceData, Color themeColor) {
     if (raceData == null) return const Text("Detaylı veri bulunamadı.");
 
     const double threshold = 1.0; // Yüzde 1'in altındakiler Diğer kategorisinde
@@ -269,7 +361,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
 
         Color barColor = e.key == 'Diğer'
           ? Colors.grey 
-          : (normalizedValue > 0.5 ? Colors.deepPurple : Colors.deepPurple.shade300);
+          : (normalizedValue > 0.5 ? themeColor : themeColor.withAlpha(150));
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 16.0),

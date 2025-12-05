@@ -59,6 +59,16 @@ class DatabaseHelper {
     return await db.insert(table, row);
   }
 
+  //VERİ SİLME (DELETE) METODU
+  Future<void> delete(int id) async {
+    Database db = await instance.database;
+    await db.delete(
+      table,
+      where: '$columnId = ?',
+      whereArgs: [id],
+    );
+  }
+
   // Tüm kayıtları okuma (SELECT *) metodu (Bunu bir sonraki adımda kullanacağız)
   Future<List<Map<String, dynamic>>> queryAllRows() async {
     Database db = await instance.database;
