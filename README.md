@@ -16,6 +16,33 @@ Bu proje, mobil tarafta kullanıcıdan alınan görsel verisinin, sunucu tarafı
 ![3](https://github.com/user-attachments/assets/0bfe965f-9239-4a6f-9f11-47d14e5f0660)
 ![4](https://github.com/user-attachments/assets/779b2b14-5f6b-4d8d-9e7a-2b67cbca21bd)
 
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/943a6847-2b2f-4d8d-8774-6d162c54a662" width="250" />
+      <br />
+      <b>Analiz Ekranı</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/968daead-c8b2-4f02-b144-db69afa36259" width="250" />
+      <br />
+      <b>Sonuçlar</b>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/0bfe965f-9239-4a6f-9f11-47d14e5f0660" width="250" />
+      <br />
+      <b>Kamera Modu</b>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/779b2b14-5f6b-4d8d-9e7a-2b67cbca21bd" width="250" />
+      <br />
+      <b>Geçmiş</b>
+    </td>
+  </tr>
+</table>
+
 ## 🛠️ Teknolojiler
 
 * **Mobil (Frontend):** Flutter, Dart, Dio, Image Picker
